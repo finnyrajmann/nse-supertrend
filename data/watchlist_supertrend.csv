@@ -1,0 +1,160 @@
+Symbol,Industry,IsBanking
+BSE,Financial Data & Stock Exchanges,False
+ICICIBANK,Banks - Regional,True
+BAJAJ-AUTO,Auto Manufacturers,False
+ADANIENSOL,Utilities - Independent Power Producers,False
+BHARTIARTL,Telecom Services,False
+ETERNAL,Internet Retail,False
+ADANIGREEN,Utilities - Renewable,False
+CUPID,Household & Personal Products,False
+IDEA,Telecom Services,False
+ADANIPOWER,Utilities - Independent Power Producers,False
+MCX,Financial Data & Stock Exchanges,False
+COFORGE,Information Technology Services,False
+WELCORP,Steel,False
+ADANIENT,Thermal Coal,False
+ATHERENERG,Auto Manufacturers,False
+EICHERMOT,Auto Manufacturers,False
+HFCL,Communication Equipment,False
+BAJFINANCE,Credit Services,True
+WELSPUNLIV,Textile Manufacturing,False
+BHEL,Specialty Industrial Machinery,False
+STLTECH,Communication Equipment,False
+TVSMOTOR,Auto Manufacturers,False
+SAIL,Steel,False
+POWERINDIA,Electrical Equipment & Parts,False
+HEROMOTOCO,Auto Manufacturers,False
+TDPOWERSYS,Specialty Industrial Machinery,False
+KALYANKJIL,Luxury Goods,False
+DLF,Real Estate - Development,False
+GRASIM,Building Materials,False
+TECHM,Information Technology Services,False
+CGPOWER,Electrical Equipment & Parts,False
+SOLARINDS,Specialty Chemicals,False
+JSWSTEEL,Steel,False
+AZAD,Specialty Industrial Machinery,False
+ADANIPORTS,Marine Shipping,False
+HYUNDAI,Auto Manufacturers,False
+MOTHERSON,Auto Parts,False
+FEDERALBNK,Banks - Regional,True
+APLAPOLLO,Steel,False
+HAL,Aerospace & Defense,False
+NETWEB,Computer Hardware,False
+GVT&D,Specialty Industrial Machinery,False
+SYRMA,Electronic Components,False
+PAYTM,Software - Infrastructure,False
+TITAN,Luxury Goods,False
+INDHOTEL,Lodging,False
+SONACOMS,Auto Parts,False
+IFCI,Credit Services,True
+NAUKRI,Internet Content & Information,False
+NYKAA,Internet Retail,False
+CHENNPETRO,Oil & Gas Refining & Marketing,False
+LODHA,Real Estate - Development,False
+AUBANK,Banks - Regional,True
+ENGINERSIN,Engineering & Construction,False
+APARINDS,Electrical Equipment & Parts,False
+MANAPPURAM,Credit Services,True
+MTARTECH,Specialty Industrial Machinery,False
+RBLBANK,Banks - Regional,True
+BOSCHLTD,Auto Parts,False
+BHARATFORG,Metal Fabrication,False
+MRPL,Oil & Gas Refining & Marketing,False
+OFSS,Software - Infrastructure,False
+IDFCFIRSTB,Banks - Regional,True
+SANSERA,Auto Parts,False
+ABCAPITAL,Financial Conglomerates,False
+ANGELONE,Capital Markets,False
+RADICO,Beverages - Wineries & Distilleries,False
+SCHNEIDER,Electrical Equipment & Parts,False
+LLOYDSME,Steel,False
+ABB,Specialty Industrial Machinery,False
+KIRLOSENG,Specialty Industrial Machinery,False
+MOTILALOFS,Capital Markets,False
+AEGISLOG,Oil & Gas Refining & Marketing,False
+NUVAMA,Asset Management,True
+MARICO,Household & Personal Products,False
+INOXINDIA,Specialty Industrial Machinery,False
+UNIONBANK,Banks - Regional,True
+DATAPATTNS,Aerospace & Defense,False
+PIDILITIND,Specialty Chemicals,False
+PNB,Banks - Regional,True
+GRAPHITE,Electrical Equipment & Parts,False
+ACUTAAS,Specialty Chemicals,False
+PFOCUS,Entertainment,False
+PNBHOUSING,Mortgage Finance,True
+JSWINFRA,Marine Shipping,False
+GAIL,Utilities - Regulated Gas,False
+REDINGTON,Information Technology Services,False
+CUB,Banks - Regional,True
+PHOENIXLTD,Real Estate - Diversified,False
+IIFL,Credit Services,True
+KARURVYSYA,Banks - Regional,True
+OIL,Oil & Gas Integrated,False
+RRKABEL,Electrical Equipment & Parts,False
+HSCL,Specialty Chemicals,False
+SIEMENS,Specialty Industrial Machinery,False
+BELRISE,Auto Parts,False
+UNOMINDA,Auto Parts,False
+GESHIP,Marine Shipping,False
+CARTRADE,Auto & Truck Dealerships,False
+FINCABLES,Electrical Equipment & Parts,False
+SHRIPISTON,Auto Parts,False
+HONASA,Household & Personal Products,False
+NAM-INDIA,Asset Management,True
+KAJARIACER,Building Products & Equipment,False
+NAVINFLUOR,Chemicals,False
+MAHABANK,Banks - Regional,True
+ABDL,Beverages - Wineries & Distilleries,False
+CGCL,Credit Services,True
+FLUOROCHEM,Specialty Chemicals,False
+STARHEALTH,Insurance - Life,True
+JYOTICNC,Specialty Industrial Machinery,False
+AETHER,Specialty Chemicals,False
+ANANDRATHI,Asset Management,True
+RKFORGE,Metal Fabrication,False
+BBOX,Software - Application,False
+JINDALSAW,Steel,False
+ACE,Farm & Heavy Construction Machinery,False
+CASTROLIND,Oil & Gas Refining & Marketing,False
+BALRAMCHIN,Confectioners,False
+INDIANB,Banks - Regional,True
+TBOTEK,Travel Services,False
+AEGISVOPAK,Oil & Gas Equipment & Services,False
+SHYAMMETL,Steel,False
+EMBASSY,Unknown,False
+OBEROIRLTY,Real Estate - Development,False
+PRIVISCL,Specialty Chemicals,False
+GABRIEL,Auto Parts,False
+PETRONET,Oil & Gas Refining & Marketing,False
+CARBORUNIV,Conglomerates,False
+ACMESOLAR,Utilities - Renewable,False
+TATATECH,Information Technology Services,False
+CPPLUS,Building Products & Equipment,False
+BAJAJHLDNG,Asset Management,True
+ZENTEC,Aerospace & Defense,False
+SCI,Marine Shipping,False
+BEML,Conglomerates,False
+PVRINOX,Entertainment,False
+THANGAMAYL,Luxury Goods,False
+CRAFTSMAN,Auto Parts,False
+POONAWALLA,Credit Services,True
+MINDACORP,Auto Parts,False
+LTFOODS,Packaged Foods,False
+PTCIL,Metal Fabrication,False
+NIACL,Insurance - Diversified,True
+ABSLAMC,Asset Management,True
+PARADEEP,Agricultural Inputs,False
+IKS,Health Information Services,False
+CEMPRO,Engineering & Construction,False
+ELGIEQUIP,Specialty Industrial Machinery,False
+AARTIIND,Specialty Chemicals,False
+USHAMART,Steel,False
+BIRET,Unknown,False
+ECLERX,Information Technology Services,False
+KPIL,Engineering & Construction,False
+CRISIL,Financial Data & Stock Exchanges,False
+ASAHIINDIA,Auto Parts,False
+AIIL,Capital Markets,False
+KPRMILL,Textile Manufacturing,False
+ZYDUSWELL,Packaged Foods,False
