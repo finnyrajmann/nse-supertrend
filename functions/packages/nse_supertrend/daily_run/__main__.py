@@ -37,6 +37,16 @@ Design summary (Nov 2026):
   watchlist_supertrend.csv, positions_supertrend.csv,
   trade_log_hit_supertrend.csv, trade_log_miss_supertrend.csv,
   entry_snapshot_supertrend.csv
+- Trading calendar: data/nse_holidays.csv (Date,Type,Description; Type is
+  HOLIDAY or COVERS_THROUGH) — same file/format as bb_ema_cross. A day is a
+  session if it is Mon-Fri and not a listed holiday. The run skips
+  non-session days (and sends a short holiday email on weekday holidays).
+  "Stale" = a stock's newest bar is older than the last COMPLETED session
+  per this calendar (NIFTY's newest bar is only a cross-check). Stale
+  watchlist stocks are skipped for new entries and listed in the email;
+  stale open positions are still evaluated on the data available and listed.
+- Invoke with {"dry_run": true} to do everything except write to GitHub;
+  the email is prefixed [DRY RUN]. {"force": true} runs on a non-session day.
 """
 
 import os
@@ -69,7 +79,9 @@ POSITION_SIZE     = 10000
 SLEEP             = 0.5
 HIT_THRESHOLD_PCT = 3.0     # PnL% strictly greater than this -> hit, else -> miss
 
-IST               = timezone(timedelta(hours=5, minutes=30))
+IST                = timezone(timedelta(hours=5, minutes=30))
+BAR_FINAL_HOUR_IST = 16      # today's daily bar counts as complete only after this hour (IST)
+HOLIDAY_PATH       = 'data/nse_holidays.csv'
 
 
 def now_ist():
@@ -86,7 +98,7 @@ def fetch_price_bars(symbol, period=DATA_PERIOD):
     ordered oldest -> newest. Returns None on failure.
 
     Safety guard: if the newest bar is dated today (IST) and the market has
-    not closed yet (before 16:00 IST), it is a partial intraday bar and is
+    not closed yet (before BAR_FINAL_HOUR_IST), it is a partial intraday bar and is
     dropped, so a mid-day manual run can never use intraday prices.
     """
     ticker = symbol.upper().strip()
@@ -128,7 +140,7 @@ def fetch_price_bars(symbol, period=DATA_PERIOD):
 
             if bars:
                 t = now_ist()
-                if bars[-1]['date'] == t.date() and t.hour < 16:
+                if bars[-1]['date'] == t.date() and t.hour < BAR_FINAL_HOUR_IST:
                     bars = bars[:-1]
             if bars:
                 return bars
@@ -282,6 +294,81 @@ def ema200_check(closes):
 
 
 # ─────────────────────────────────────────────
+# TRADING CALENDAR (explicit holiday list — not inferred from Yahoo)
+# ─────────────────────────────────────────────
+HOLIDAYS         = set()
+CALENDAR_THROUGH = None    # date through which the holiday list is known complete
+CALENDAR_OK      = False
+REF_DATE         = None    # last COMPLETED session per the calendar (set in main)
+
+
+def parse_date(v):
+    try:
+        return datetime.strptime(str(v).strip()[:10], '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+def load_calendar(content):
+    """Parse data/nse_holidays.csv (Date,Type,Description)."""
+    global HOLIDAYS, CALENDAR_THROUGH, CALENDAR_OK
+    HOLIDAYS, CALENDAR_THROUGH = set(), None
+    for r in parse_csv(content):
+        t = (r.get('Type') or '').strip().upper()
+        d = parse_date(r.get('Date'))
+        if d is None:
+            continue
+        if t == 'HOLIDAY':
+            HOLIDAYS.add(d)
+        elif t == 'COVERS_THROUGH':
+            CALENDAR_THROUGH = d
+    CALENDAR_OK = True
+
+
+def is_trading_day(d):
+    return d.weekday() < 5 and d not in HOLIDAYS
+
+
+def prev_trading_day(d):
+    d -= timedelta(days=1)
+    while not is_trading_day(d):
+        d -= timedelta(days=1)
+    return d
+
+
+def last_completed_session(t):
+    """Most recent session whose daily bar should be final at IST datetime t."""
+    d = t.date()
+    if is_trading_day(d) and t.hour >= BAR_FINAL_HOUR_IST:
+        return d
+    return prev_trading_day(d)
+
+
+def calendar_notices(today):
+    notes = []
+    if not CALENDAR_OK:
+        notes.append(f"Holiday calendar ({HOLIDAY_PATH}) could not be loaded — only weekends are "
+                     f"treated as non-trading days.")
+    elif CALENDAR_THROUGH is None or today > CALENDAR_THROUGH:
+        notes.append(f"Holiday calendar is only confirmed through {CALENDAR_THROUGH} — update "
+                     f"{HOLIDAY_PATH} and its COVERS_THROUGH row.")
+    elif (CALENDAR_THROUGH - today).days < 14:
+        notes.append(f"Holiday calendar ends {CALENDAR_THROUGH} — add the next holidays soon.")
+    return notes
+
+
+def fetch_ref_date():
+    """Newest bar date on ^NSEI — used only as a cross-check of the calendar."""
+    bars = fetch_price_bars('^NSEI', '5d')
+    return bars[-1]['date'] if bars else None
+
+
+def is_stale(bars):
+    """True if this symbol's newest bar is older than the last completed session."""
+    return bool(REF_DATE and bars and bars[-1]['date'] < REF_DATE)
+
+
+# ─────────────────────────────────────────────
 # GITHUB REST API
 # ─────────────────────────────────────────────
 def github_get(repo, path, pat):
@@ -337,11 +424,12 @@ def run_exit(positions, hit_log, miss_log):
       1. Supertrend flipped down on the latest bar  -> SUPERTREND_FLIP
       2. EMA200 structure / price>EMA200 now failing -> EMA200_FAIL
     Exit fill = latest close (previous session). Exit date = run date.
-    Returns (exits, holds, remaining_positions, hit_log, miss_log)
+    Returns (exits, holds, remaining_positions, stale_positions, hit_log, miss_log)
     """
     exits         = []
     holds         = []
     new_positions = []
+    stale_positions = []
     hit_log       = list(hit_log)
     miss_log      = list(miss_log)
     today         = now_ist().date()
@@ -362,6 +450,10 @@ def run_exit(positions, hit_log, miss_log):
             print(f"  WARN: no usable data for {symbol} — position kept as is")
             new_positions.append(pos)
             continue
+
+        if is_stale(bars):
+            print(f"  STALE data for {symbol}: last bar {bars[-1]['date']} < {REF_DATE} — evaluated on available data")
+            stale_positions.append(f"{symbol} (as of {bars[-1]['date']})")
 
         closes = [b['close'] for b in bars]
         price  = round(closes[-1], 2)
@@ -416,7 +508,7 @@ def run_exit(positions, hit_log, miss_log):
                 'AboveLine%': round((price - st_line) / price * 100, 2),
             })
 
-    return exits, holds, new_positions, hit_log, miss_log
+    return exits, holds, new_positions, stale_positions, hit_log, miss_log
 
 
 # ─────────────────────────────────────────────
@@ -428,6 +520,10 @@ def run_entry(watchlist, positions, entry_snapshots):
     setup, and enter if the latest close is the first close above the
     20-bar level AND the EMA200 gate passes today.
 
+    Stocks whose newest bar is older than the last completed session (stale
+    data) are skipped and reported, since an entry can only be detected on a
+    stock's newest bar.
+
     Also collects 'armed' setups (flipped up, EMA200 gate passing, still
     waiting for the first close above the level) for the email only —
     nothing about them is stored.
@@ -435,6 +531,7 @@ def run_entry(watchlist, positions, entry_snapshots):
     open_symbols    = {p['Symbol'] for p in positions}
     new_entries     = []
     armed           = []
+    stale_skipped   = []
     entry_snapshots = list(entry_snapshots)
     entry_date      = now_ist().strftime('%Y-%m-%d')
 
@@ -446,6 +543,10 @@ def run_entry(watchlist, positions, entry_snapshots):
         bars = fetch_price_bars(symbol)
         time.sleep(SLEEP)
         if not bars or len(bars) < MIN_HISTORY:
+            continue
+        if is_stale(bars):
+            print(f"  STALE data for {symbol}: last bar {bars[-1]['date']} < {REF_DATE} — skipped")
+            stale_skipped.append(f"{symbol} (as of {bars[-1]['date']})")
             continue
         st = calc_supertrend(bars)
         if st is None:
@@ -506,20 +607,36 @@ def run_entry(watchlist, positions, entry_snapshots):
             })
 
     armed.sort(key=lambda a: a['ToLevel%'])
-    return new_entries, positions, entry_snapshots, armed
+    return new_entries, positions, entry_snapshots, armed, stale_skipped
 
 
 # ─────────────────────────────────────────────
 # EMAIL
 # ─────────────────────────────────────────────
+def send_holiday_email(today, reason):
+    sender     = os.environ.get('GMAIL_SENDER')
+    password   = os.environ.get('GMAIL_APP_PASSWORD')
+    recipients = [r.strip() for r in os.environ.get('GMAIL_RECIPIENT', '').split(',') if r.strip()]
+    msg = MIMEMultipart()
+    msg['From']    = sender
+    msg['To']      = ', '.join(recipients)
+    msg['Subject'] = f"NSE SUPERTREND — {today.strftime('%d %b %Y')} | market holiday — no run"
+    msg.attach(MIMEText(f"<p>{reason}. No positions or logs were touched.</p>", 'html'))
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(sender, password)
+        server.sendmail(sender, recipients, msg.as_string())
+
+
 def send_email(exits, entries, holds, armed, alltime_pnl=None, alltime_count=None,
-               hit_count=None, miss_count=None):
+               hit_count=None, miss_count=None, notices=None, stale_skipped=None,
+               stale_positions=None, dry_run=False):
     sender     = os.environ.get('GMAIL_SENDER')
     password   = os.environ.get('GMAIL_APP_PASSWORD')
     recipients = [r.strip() for r in os.environ.get('GMAIL_RECIPIENT', '').split(',') if r.strip()]
     repo_name  = os.environ.get('GITHUB_REPO')
     today      = now_ist().strftime('%d %b %Y')
-    subject    = f"NSE SUPERTREND — {today} | {len(entries)} new | {len(holds)} open"
+    subject    = (f"{'[DRY RUN] ' if dry_run else ''}NSE SUPERTREND — {today} | "
+                  f"{len(entries)} new | {len(holds)} open")
 
     def table_style():
         return 'border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:14px;'
@@ -542,6 +659,23 @@ def send_email(exits, entries, holds, armed, alltime_pnl=None, alltime_count=Non
         NSE SUPERTREND — {today}
     </h2>
     '''
+
+    # NOTICES (calendar / data quality)
+    notices         = notices or []
+    stale_skipped   = stale_skipped or []
+    stale_positions = stale_positions or []
+    if notices or stale_skipped or stale_positions:
+        html += section_header('Notices')
+        html += '<ul style="font-family:Arial,sans-serif;font-size:13px;">'
+        for n in notices:
+            html += f'<li>{n}</li>'
+        if stale_skipped:
+            html += (f'<li>{len(stale_skipped)} watchlist stock(s) had stale data and were skipped '
+                     f'for new entries today: {", ".join(stale_skipped)}</li>')
+        if stale_positions:
+            html += (f'<li>{len(stale_positions)} open position(s) had stale data and were evaluated '
+                     f'on the latest available bar: {", ".join(stale_positions)}</li>')
+        html += '</ul>'
 
     # EXITS
     html += section_header(
@@ -676,8 +810,13 @@ def send_email(exits, entries, holds, armed, alltime_pnl=None, alltime_count=Non
 # MAIN
 # ─────────────────────────────────────────────
 def main(args):
+    global REF_DATE
+    args    = args or {}
+    dry_run = bool(args.get('dry_run'))
+    force   = bool(args.get('force'))
+
     print("\n" + "=" * 50)
-    print("  NSE SUPERTREND — DO Functions Run")
+    print("  NSE SUPERTREND — DO Functions Run" + ("  [DRY RUN]" if dry_run else ""))
     print("=" * 50)
 
     pat       = os.environ.get('GITHUB_PAT')
@@ -690,6 +829,32 @@ def main(args):
     snap_path     = f'data/entry_snapshot_{SYSTEM_CODE}.csv'
 
     try:
+        # Trading calendar (explicit holiday list)
+        t     = now_ist()
+        today = t.date()
+        try:
+            cal_content, _ = github_get(repo_name, HOLIDAY_PATH, pat)
+            load_calendar(cal_content)
+            print(f"      Calendar: {len(HOLIDAYS)} holidays, confirmed through {CALENDAR_THROUGH}")
+        except Exception as e:
+            print(f"      WARNING: could not load {HOLIDAY_PATH}: {e}")
+        notices = calendar_notices(today)
+
+        if not is_trading_day(today) and not force:
+            reason = ('Weekend' if today.weekday() >= 5 else 'NSE trading holiday') + f" ({today})"
+            print(f"  {reason} — nothing to do.")
+            if today.weekday() < 5 and not dry_run:
+                send_holiday_email(today, reason)
+            return {"statusCode": 200, "body": f"{reason}: skipped"}
+
+        REF_DATE   = last_completed_session(t)
+        nifty_date = fetch_ref_date()
+        print(f"      Last completed session (calendar): {REF_DATE} | NIFTY newest bar: {nifty_date}")
+        if nifty_date and nifty_date != REF_DATE:
+            notices.append(f"Calendar expects the last session to be {REF_DATE} but NIFTY's newest "
+                           f"bar is {nifty_date} — either Yahoo is lagging/ahead or the holiday "
+                           f"list is wrong.")
+
         # Load data from GitHub
         print("\n[1/5] Loading data from GitHub...")
         pos_content, pos_sha       = github_get(repo_name, pos_path, pat)
@@ -707,13 +872,14 @@ def main(args):
 
         # Exit monitor
         print("\n[2/5] Exit Monitor...")
-        exits, holds, positions, hit_log, miss_log = run_exit(positions, hit_log, miss_log)
-        print(f"      {len(exits)} exit(s) | {len(holds)} holding")
+        exits, holds, positions, stale_positions, hit_log, miss_log = run_exit(positions, hit_log, miss_log)
+        print(f"      {len(exits)} exit(s) | {len(holds)} holding | {len(stale_positions)} stale position(s)")
 
         # Entry scanner
         print("\n[3/5] Entry Scanner...")
-        entries, positions, entry_snapshots, armed = run_entry(watchlist, positions, entry_snapshots)
-        print(f"      {len(entries)} new signal(s) | {len(armed)} armed setup(s)")
+        entries, positions, entry_snapshots, armed, stale_skipped = run_entry(watchlist, positions, entry_snapshots)
+        print(f"      {len(entries)} new signal(s) | {len(armed)} armed setup(s) | "
+              f"{len(stale_skipped)} stale stock(s) skipped")
 
         # Add today's entries to holds for email
         for e in entries:
@@ -729,8 +895,8 @@ def main(args):
             })
 
         # Sync to GitHub
-        print("\n[4/5] Syncing to GitHub...")
-        commit_msg = f"Auto-update — {now_ist().strftime('%Y-%m-%d')}"
+        print("\n[4/5] Syncing to GitHub..." + (" (SKIPPED — dry run)" if dry_run else ""))
+        commit_msg = f"Auto-update — {today.strftime('%Y-%m-%d')}"
 
         pos_fields  = ['Symbol', 'EntryDate', 'EntryPrice', 'Quantity', 'TrackType']
         log_fields  = ['Symbol', 'EntryDate', 'EntryPrice', 'Quantity', 'Capital',
@@ -739,14 +905,15 @@ def main(args):
         snap_fields = ['Symbol', 'EntryDate', 'Price', 'Supertrend', 'FlipDate',
                        'Level20High', 'EMA200']
 
-        github_put(repo_name, pos_path, pat,
-                   to_csv(positions, pos_fields), pos_sha, commit_msg)
-        github_put(repo_name, hit_log_path, pat,
-                   to_csv(hit_log, log_fields), hit_sha, commit_msg)
-        github_put(repo_name, miss_log_path, pat,
-                   to_csv(miss_log, log_fields), miss_sha, commit_msg)
-        github_put(repo_name, snap_path, pat,
-                   to_csv(entry_snapshots, snap_fields), snap_sha, commit_msg)
+        if not dry_run:
+            github_put(repo_name, pos_path, pat,
+                       to_csv(positions, pos_fields), pos_sha, commit_msg)
+            github_put(repo_name, hit_log_path, pat,
+                       to_csv(hit_log, log_fields), hit_sha, commit_msg)
+            github_put(repo_name, miss_log_path, pat,
+                       to_csv(miss_log, log_fields), miss_sha, commit_msg)
+            github_put(repo_name, snap_path, pat,
+                       to_csv(entry_snapshots, snap_fields), snap_sha, commit_msg)
 
         # Cumulative trade-log P&L (all closed trades to date, hit + miss)
         alltime_pnl = (sum(float(r['PnL']) for r in hit_log) +
@@ -756,10 +923,12 @@ def main(args):
         # Send email
         print("\n[5/5] Sending email...")
         send_email(exits, entries, holds, armed, alltime_pnl, alltime_count,
-                   len(hit_log), len(miss_log))
+                   len(hit_log), len(miss_log), notices=notices,
+                   stale_skipped=stale_skipped, stale_positions=stale_positions,
+                   dry_run=dry_run)
 
         print("\n  Done.\n")
-        return {"statusCode": 200, "body": "Pipeline complete"}
+        return {"statusCode": 200, "body": "Pipeline complete" + (" (dry run)" if dry_run else "")}
 
     except Exception as e:
         import traceback
